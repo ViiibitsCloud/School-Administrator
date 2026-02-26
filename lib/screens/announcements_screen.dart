@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:html' as html;
+import 'package:flutter/services.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
   const AnnouncementsScreen({super.key});
@@ -9,29 +11,63 @@ class AnnouncementsScreen extends StatefulWidget {
 }
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
-  final _controller = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+
+  void _speakText(String text) {
+    final utterance = html.SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.rate = 1;
+    html.window.speechSynthesis?.speak(utterance);
+  }
+
+  void _stopSpeech() {
+    html.window.speechSynthesis?.cancel();
+  }
+
 
   Future<void> _addAnnouncement() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
     await FirebaseFirestore.instance.collection('announcements').add({
-      'message': _controller.text.trim(),
+      'message': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
     _controller.clear();
+  }
+
+
+  Future<void> _deleteAnnouncement(String docId) async {
+    await FirebaseFirestore.instance
+        .collection('announcements')
+        .doc(docId)
+        .delete();
+  }
+
+  
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       color: Colors.white,
-
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Announcements",
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const Text(
+              "Announcements",
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 20),
+
             Row(
               children: [
                 Expanded(
@@ -49,11 +85,17 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     backgroundColor: Colors.blue,
                   ),
                   onPressed: _addAnnouncement,
-                  child: const Text("Post", style: TextStyle(color: Colors.white)),
-                )
+                  child: const Text(
+                    "Post",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 24),
+
+            const SizedBox(height: 30),
+
+          
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -64,29 +106,51 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
-        
+
                   final docs = snapshot.data!.docs;
-        
+
                   return ListView.builder(
                     itemCount: docs.length,
                     itemBuilder: (context, index) {
-                      final data = docs[index].data() as Map<String, dynamic>;
+                      final doc = docs[index];
+                      final data =
+                          doc.data() as Map<String, dynamic>;
+                      final message = data['message'] ?? "";
+
                       return Card(
-                        color: Colors.grey[100],
+                        color: Colors.white,
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         elevation: 1,
                         child: ListTile(
-                          title: Text(data['message'] ?? ""),
+                          title: Text(message),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+
+                              /// PLAY
+                              IconButton(
+                                icon: const Icon(Icons.volume_up),
+                                onPressed: () => _speakText(message),
+                              ),
+
+                              IconButton(
+                                icon: const Icon(Icons.delete,
+                                    color: Colors.red),
+                                onPressed: () =>
+                                    _deleteAnnouncement(doc.id),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
                   );
                 },
               ),
-            )
+            ),
           ],
         ),
       ),
     );
   }
-}     
+}
