@@ -7,34 +7,61 @@ class ManageStudentsScreen extends StatefulWidget {
   const ManageStudentsScreen({super.key});
 
   @override
-  State<ManageStudentsScreen> createState() => _ManageStudentsScreenState();
+  State<ManageStudentsScreen> createState() =>
+      _ManageStudentsScreenState();
 }
 
-class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
+class _ManageStudentsScreenState
+    extends State<ManageStudentsScreen> {
+
   bool _uploading = false;
-  Future<void> fixOldStudents() async {
-  final students =
-      await FirebaseFirestore.instance.collection('students').get();
 
-  for (var doc in students.docs) {
-    final data = doc.data();
-
-    if (data['studentId'] == null) {
-      final newId =
-          "STU${DateTime.now().year}${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
-
-      await doc.reference.update({
-        'studentId': newId,
-      });
-    }
+  //student ID generator
+  String generateStudentId(int year) {
+    final random =
+        DateTime.now().millisecondsSinceEpoch.toString();
+    final fiveDigit =
+        random.substring(random.length - 5);
+    return "MGK/$year/$fiveDigit";
   }
-}
 
-@override
-void initState() {
-  super.initState();
-  // fixOldStudents(); // Uncomment this line to fix old students without IDs
-}
+ //Duplicate Check
+  Future<bool> isDuplicateStudent({
+    required String email,
+    required String phone,
+    required String roll,
+    required String name,
+    required String className,
+    required String division,
+  }) async {
+    final emailQuery = await FirebaseFirestore.instance
+        .collection('students')
+        .where('email', isEqualTo: email)
+        .get();
+
+    if (emailQuery.docs.isNotEmpty) return true;
+
+    final phoneQuery = await FirebaseFirestore.instance
+        .collection('students')
+        .where('phone', isEqualTo: phone)
+        .get();
+
+    if (phoneQuery.docs.isNotEmpty) return true;
+
+    final comboQuery = await FirebaseFirestore.instance
+        .collection('students')
+        .where('roll', isEqualTo: roll)
+        .where('class', isEqualTo: className)
+        .where('division', isEqualTo: division)
+        .where('name', isEqualTo: name)
+        .get();
+
+    if (comboQuery.docs.isNotEmpty) return true;
+
+    return false;
+  }
+
+ 
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -44,89 +71,103 @@ void initState() {
           children: [
             const Text(
               "Students List",
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
             ),
             const Spacer(),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-              ),
-              icon: const Icon(Icons.upload_file, color: Colors.white),
-              label: const Text("Upload Excel", style: TextStyle(color: Colors.white)),
-              onPressed: () {
-                _uploadExcel();
-              },
+                  backgroundColor: Colors.blue),
+              icon: const Icon(Icons.upload_file,
+                  color: Colors.white),
+              label: const Text("Upload Excel",
+                  style: TextStyle(color: Colors.white)),
+              onPressed: _uploadExcel,
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
+
+     //Scrolling DataTable
         Expanded(
           child: Card(
-            color: Colors.white,
-            elevation: 3,
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('students')
                   .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                      child: CircularProgressIndicator());
                 }
 
                 final docs = snapshot.data!.docs;
 
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text("Student ID")),
-                      DataColumn(label: Text("Roll")),
-                      DataColumn(label: Text("Name")),
-                      DataColumn(label: Text("Class")),
-                      DataColumn(label: Text("Division")),
-                      DataColumn(label: Text("Age")),
-                      DataColumn(label: Text("Phone")),
-                      DataColumn(label: Text("Gender")),
-                      DataColumn(label: Text("Updated At")),
-                      DataColumn(label: Text("Fees")),
-                      DataColumn(label: Text("Actions")),
-                    ],
-                    rows: docs.map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      return DataRow(cells: [
-                        DataCell(Text(data['studentId'] ?? "Generating...")),
-                        DataCell(Text(data['roll'] ?? "")),
-                        DataCell(Text(data['name'] ?? "")),
-                        DataCell(Text(data['class'] ?? "")),
-                        DataCell(Text(data['division'] ?? "")),
-                        DataCell(Text(data['age'].toString())),
-                        DataCell(Text(data['phone'] ?? "")),
-                        DataCell(Text(data['gender'] ?? "")),
-                        DataCell(Text(data['updatedAt'] != null
-                            ? (data['updatedAt'] as Timestamp)
-                                .toDate()
-                                .toString()
-                            : "Never")),
-                        DataCell(Text(data['fees'].toString())),
-                        DataCell(Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
-                              onPressed: () { }
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () async {
-            await FirebaseFirestore.instance
-                .collection('students')
-                .doc(doc.id)
-                .delete();
-          },  
-                            ),
-                          ],
-                        )),
-                      ]);
-                    }).toList(),
+                return Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text("Student ID")),
+                          DataColumn(label: Text("Roll")),
+                          DataColumn(label: Text("Name")),
+                          DataColumn(label: Text("Class")),
+                          DataColumn(label: Text("Division")),
+                          DataColumn(label: Text("Phone")),
+                          DataColumn(label: Text("Email")),
+                          DataColumn(label: Text("Gender")),
+                          DataColumn(label: Text("Fees")),
+                          DataColumn(label: Text("Actions")),
+                        ],
+                        rows: docs.map((doc) {
+                          final data =
+                              doc.data() as Map<String, dynamic>;
+
+                          return DataRow(cells: [
+                            DataCell(Text(
+                                data['studentId'] ?? "")),
+                            DataCell(Text(data['roll'] ?? "")),
+                            DataCell(Text(data['name'] ?? "")),
+                            DataCell(Text(data['class'] ?? "")),
+                            DataCell(Text(
+                                data['division'] ?? "")),
+                            DataCell(Text(data['phone'] ?? "")),
+                            DataCell(Text(data['email'] ?? "")),
+                            DataCell(Text(
+                                data['gender'] ?? "")),
+                            DataCell(Text(
+                                data['fees']?.toString() ??
+                                    "0")),
+                            DataCell(Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit,
+                                      color: Colors.blue),
+                                  onPressed: () {
+                                    _showEditDialog(
+                                        doc.id, data);
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete,
+                                      color: Colors.red),
+                                  onPressed: () async {
+                                    await FirebaseFirestore
+                                        .instance
+                                        .collection('students')
+                                        .doc(doc.id)
+                                        .delete();
+                                  },
+                                ),
+                              ],
+                            )),
+                          ]);
+                        }).toList(),
+                      ),
+                    ),
                   ),
                 );
               },
@@ -137,58 +178,166 @@ void initState() {
     );
   }
 
+//Excel Upload Handler
   Future<void> _uploadExcel() async {
-  setState(() => _uploading = true);
+    setState(() => _uploading = true);
 
-  try {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xls', 'xlsx'],
-      withData: true, // IMPORTANT FOR WEB
-    );
+    try {
+      FilePickerResult? result =
+          await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xls', 'xlsx'],
+        withData: true,
+      );
 
-    if (result == null) return;
+      if (result == null) return;
 
-    final bytes = result.files.single.bytes!;
-    final excel = Excel.decodeBytes(bytes);
+      final bytes = result.files.single.bytes!;
+      final excel = Excel.decodeBytes(bytes);
+      final sheet =
+          excel.tables[excel.tables.keys.first]!;
 
-    final sheet = excel.tables[excel.tables.keys.first]!;
+      int success = 0;
+      int duplicate = 0;
 
-    final batch = FirebaseFirestore.instance.batch();
+      for (var row in sheet.rows.skip(1)) {
+        final roll = row[0]?.value.toString() ?? "";
+        final name = row[1]?.value.toString() ?? "";
+        final className =
+            row[2]?.value.toString() ?? "";
+        final division =
+            row[3]?.value.toString() ?? "";
+        final phone =
+            row[4]?.value.toString() ?? "";
+        final email =
+            row[5]?.value.toString() ?? "";
+        final gender =
+            row[6]?.value.toString() ?? "";
+        final birthYear =
+            int.tryParse(row[7]?.value.toString() ?? "") ??
+                DateTime.now().year;
 
-    for (var row in sheet.rows.skip(1)) {
+        final isDuplicate =
+            await isDuplicateStudent(
+          email: email,
+          phone: phone,
+          roll: roll,
+          name: name,
+          className: className,
+          division: division,
+        );
 
-  final docRef =
-      FirebaseFirestore.instance.collection('students').doc();
+        if (isDuplicate) {
+          duplicate++;
+          continue;
+        }
 
-  final generatedId =
-      "STU${DateTime.now().year}${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
+        final id =
+            generateStudentId(birthYear);
 
-  batch.set(docRef, {
-    'studentId': generatedId,
-    'roll': row[0]?.value.toString(),
-    'name': row[1]?.value.toString(),
-    'class': row[2]?.value.toString(),
-    'division': row[3]?.value.toString(),
-    'age': int.tryParse(row[4]?.value.toString() ?? '0') ?? 0,
-    'phone': row[5]?.value.toString(),
-    'gender': row[6]?.value.toString(),
-    'updatedAt': FieldValue.serverTimestamp(),
-    'fees': 0,
-    'attendance': 0,
-  });
-}
-    await batch.commit();
+        await FirebaseFirestore.instance
+            .collection('students')
+            .add({
+          'studentId': id,
+          'roll': roll,
+          'name': name,
+          'class': className,
+          'division': division,
+          'phone': phone,
+          'email': email,
+          'gender': gender,
+          'fees': 0,
+          'updatedAt':
+              FieldValue.serverTimestamp(),
+        });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Students uploaded successfully")),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Upload failed: $e")));
-        print("Upload failed: $e");
-  } finally {
-    setState(() => _uploading = false);
+        success++;
+      }
+
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("Upload Summary"),
+          content: Text(
+              "Added: $success\nSkipped Duplicates: $duplicate"),
+          actions: [
+            TextButton(
+                onPressed: () =>
+                    Navigator.pop(context),
+                child: const Text("OK"))
+          ],
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+              SnackBar(content: Text("Error: $e")));
+    } finally {
+      setState(() => _uploading = false);
+    }
   }
-}
+
+  
+  //Edit Dialog
+  void _showEditDialog(
+      String docId,
+      Map<String, dynamic> data) {
+    final nameCtrl =
+        TextEditingController(text: data['name']);
+    final phoneCtrl =
+        TextEditingController(text: data['phone']);
+    final emailCtrl =
+        TextEditingController(text: data['email']);
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Edit Student"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+                controller: nameCtrl,
+                decoration:
+                    const InputDecoration(
+                        labelText: "Name")),
+            TextField(
+                controller: phoneCtrl,
+                decoration:
+                    const InputDecoration(
+                        labelText: "Phone")),
+            TextField(
+                controller: emailCtrl,
+                decoration:
+                    const InputDecoration(
+                        labelText: "Email")),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () =>
+                  Navigator.pop(context),
+              child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseFirestore
+                  .instance
+                  .collection('students')
+                  .doc(docId)
+                  .update({
+                'name': nameCtrl.text.trim(),
+                'phone': phoneCtrl.text.trim(),
+                'email': emailCtrl.text.trim(),
+                'updatedAt':
+                    FieldValue.serverTimestamp(),
+              });
+
+              Navigator.pop(context);
+            },
+            child: const Text("Update"),
+          ),
+        ],
+      ),
+    );
+  }
 }
